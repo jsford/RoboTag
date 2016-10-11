@@ -42,10 +42,16 @@ class World:
 
         #self.djikstra_solve()
         # SET_END
-        for goal in range(0, len(self.path), 100):
-            astar_path = self.astar_solve(self.start, self.path[goal])
-            for l in astar_path:
-                self.img[l] = [255, 255, 255, 255]
+        #for goal in range(0, len(self.path), 100):
+        goal = 500 
+        start = time.time()        
+        astar_path = self.astar_solve(self.start, self.path[goal])
+        #astar_path = self.astar_solve(self.path[goal], self.start)
+        end = time.time()
+        print "Time [sec]: ", end-start
+        print "Path Length: ", len(astar_path)
+        for l in astar_path:
+            self.img[l] = [255, 255, 255, 255]
 
         while(1):
             self._update_display()
@@ -64,7 +70,7 @@ class World:
     def _update_display(self):
         if(self.verbose):
             img = self.img
-            #img = cv.resize(self.img, (800,800), interpolation=cv.INTER_NEAREST)
+            img = cv.resize(self.img, (1000,1000), interpolation=cv.INTER_NEAREST)
             img = cv.cvtColor(img, cv.COLOR_BGRA2RGBA)
             cv.imshow("RoboChase", img)        
             key = cv.waitKey(1)
@@ -129,7 +135,7 @@ class World:
 
         print "ASTAR: "+str(start)+" -> "+str(end)
 
-        closed_set = [] 
+        closed_set = set([])
         open_set = PriorityQueue()
         open_set.push(self.manhattan_dist(start, end), start)
 
@@ -139,21 +145,20 @@ class World:
         
         count = 0
         while open_set.notEmpty():
-            if count >= 100:
+            curr = open_set.pop() 
+            if count % 1000 == 0 or curr == end:
                 for o in open_set.array:
                     self.img[o.value] = [0, 0, 255, 255]
                 for c in closed_set:
                     self.img[c] = [0, 255, 0, 255]
                 self._update_display()
-                count = 0
             count += 1
 
-            curr = open_set.pop() 
             if curr == end:
-                print "DONE!"
+                print "DONE! " + str(count) + " states"
                 return self.reconstruct_path(prev, curr)
 
-            closed_set.append(curr)
+            closed_set.add(curr)
             for neighbor in [(curr[0]+1, curr[1]  ), (curr[0]-1, curr[1]  ),
                              (curr[0]  , curr[1]-1), (curr[0]  , curr[1]+1)]:
                 if(neighbor[0] >= self.N or neighbor[1] >= self.N or 
@@ -167,7 +172,7 @@ class World:
                 if tentative_gscore >= gscore[neighbor]:
                     continue
                 elif neighbor not in open_set:
-                    open_set.push(tentative_gscore + 500*self.manhattan_dist(neighbor, end), neighbor)
+                    open_set.push(tentative_gscore + 100*self.manhattan_dist(neighbor, end), neighbor)
 
                 prev[neighbor]   = list(curr)
                 gscore[neighbor] = tentative_gscore
