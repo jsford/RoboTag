@@ -3,7 +3,7 @@ import numpy.ma as ma
 import matplotlib.pyplot as plt
 import cv2 as cv
 import time
-from priority_queue import *
+import heapq as hq
 
 class World:
     def __init__(self, fname, verbose=False):
@@ -32,26 +32,26 @@ class World:
 
 
         # Get B
-        self.weights = np.empty(shape=(self.N**2), dtype = np.int64)
+        self.weights = np.empty(shape=(self.N, self.N), dtype = np.int64)
         for x in range(0, self.N):
             line = f.readline().strip().split(',')
             line = [int(w) for w in line]
-            self.weights[x*self.N:(x+1)*self.N] = np.array(line)
+            self.weights[x,:] = np.array(line)
+
+        for i in range(0, self.N):
+            for j in range(0, self.N):
+                if self.weights[i,j] < 200:
+                    self.weights[i,j] = 1
+            
 
         self._init_display()
 
-        #self.djikstra_solve()
         # SET_END
-        #for goal in range(0, len(self.path), 100):
-        goal = 500 
-        start = time.time()        
-        astar_path = self.astar_solve(self.start, self.path[goal])
-        #astar_path = self.astar_solve(self.path[goal], self.start)
-        end = time.time()
-        print "Time [sec]: ", end-start
+        astar_path = self.astar_solve(tuple(self.start), tuple(self.path[0]))
+        #astar_path = self.astar_solve((500,100), (400,300))
         print "Path Length: ", len(astar_path)
         for l in astar_path:
-            self.img[l] = [255, 255, 255, 255]
+            self.img[l] = [255, 0, 255, 255]
 
         while(1):
             self._update_display()
@@ -62,7 +62,10 @@ class World:
         self.img = np.log10(self.weights.reshape((self.N, self.N)))
         max = np.max(self.img)
         min = np.min(self.img)
-        self.img = 1 - (self.img-min) / float(max-min)
+        self.img -= min
+        if max > min:
+            self.img /= float(max-min)
+        self.img = 1-self.img
         self.img = plt.cm.hot(self.img, bytes=True)
 
         self.img[self.start[0]][self.start[1]] = [0,0,255,255]
@@ -120,62 +123,81 @@ class World:
     def manhattan_dist(self, start, end):
         return abs(start[0] - end[0]) + abs(start[1] - end[1])
 
+    def euclidean_dist(self, start, end):
+        return np.sqrt((start[0]-end[0])**2 + (start[1]-end[1])**2)
+
     def reconstruct_path(self, prev, current):
-        current = tuple(current)
+        current = current
         total_path = [current]
-        print current
-        while current != (-1, -1):
-            current = tuple(prev[current])
+        while True:
+            current = prev[current]
+            if current == None: break
             total_path.append(current)
+            print current
         return total_path
 
-    def astar_solve(self, start, end):
-        start = tuple(start)
-        end   = tuple(end)
+    def get_successors(self, node):
+        neighbors = []
+        for neighbor in [(node[0]+1, node[1]  ), (node[0]-1, node[1]  ), 
+                         (node[0]  , node[1]-1), (node[0]  , node[1]+1)]:
 
-        print "ASTAR: "+str(start)+" -> "+str(end)
+            if(neighbor[0] >= self.N or neighbor[1] >= self.N or 
+                neighbor[0] < 0 or neighbor[1] < 0):
+                continue
+            neighbors.append(neighbor)
+        return neighbors
+
+    def astar_solve(self, start, end):
 
         closed_set = set([])
-        open_set = PriorityQueue()
-        open_set.push(self.manhattan_dist(start, end), start)
+        open_set = []
+        hq.heappush(open_set, (0, start)) # Don't need to calculate heuristic bc any value will be the min.
 
-        prev   = np.full((self.N, self.N, 2), (-1,-1))
-        gscore = np.full((self.N, self.N), np.inf)
-        gscore[start[0],start[1]] = 0
+        prev   = {} 
+        prev[start] = None
+        gscore = {} 
+        gscore[start] = 0
         
         count = 0
-        while open_set.notEmpty():
-            curr = open_set.pop() 
+        while open_set:
+            # Pick the frontier node with smallest fscore.
+            curr = hq.heappop(open_set)[-1]
+
+            # If curr has been explored previously, skip it.
+            if curr in closed_set:
+                continue
+
+            # Bullshit for debug
             if count % 1000 == 0 or curr == end:
-                for o in open_set.array:
-                    self.img[o.value] = [0, 0, 255, 255]
+                for o in open_set:
+                    self.img[o[-1]] = [0, 0, 255, 255]
                 for c in closed_set:
                     self.img[c] = [0, 255, 0, 255]
                 self._update_display()
             count += 1
 
+            # If we found the goal, quit.
             if curr == end:
                 print "DONE! " + str(count) + " states"
                 return self.reconstruct_path(prev, curr)
 
+            # Add this node to the closed set.
             closed_set.add(curr)
-            for neighbor in [(curr[0]+1, curr[1]  ), (curr[0]-1, curr[1]  ),
-                             (curr[0]  , curr[1]-1), (curr[0]  , curr[1]+1)]:
-                if(neighbor[0] >= self.N or neighbor[1] >= self.N or 
-                    neighbor[0] < 0 or neighbor[1] < 0):
-                    continue
-                   
-                if neighbor in closed_set:
-                    continue
-
-                tentative_gscore = gscore[curr] + self.weights[neighbor[0]*self.N + neighbor[1]]
-                if tentative_gscore >= gscore[neighbor]:
-                    continue
-                elif neighbor not in open_set:
-                    open_set.push(tentative_gscore + 100*self.manhattan_dist(neighbor, end), neighbor)
-
-                prev[neighbor]   = list(curr)
-                gscore[neighbor] = tentative_gscore
+            # Expand this node.
+            for neighbor in self.get_successors(curr):
+                if neighbor in closed_set: continue 
+                # Find the cost of the cheapest path to neighbor via curr
+                new_gscore = gscore[curr] + self.weights[neighbor[0], neighbor[1]]
+                # If neighbor is new or we found a cheaper path
+                if neighbor not in open_set or new_gscore < gscore[neighbor]:
+                    # fscore is g+h
+                    fscore = new_gscore + self.manhattan_dist(neighbor, end)
+                    # Add neighbor to the frontier
+                    hq.heappush(open_set, (fscore, neighbor))
+                    # Keep track of its predecessor
+                    prev[neighbor] = curr
+                    # Update its gscore
+                    gscore[neighbor] = new_gscore
 
         print 'FAILED!'
         return
