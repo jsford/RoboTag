@@ -32,34 +32,34 @@ class World:
 
 
         # Get B
-        self.weights = np.empty(shape=(self.N, self.N), dtype = np.int64)
+        self.costmap = np.empty(shape=(self.N, self.N), dtype = np.int64)
         for x in range(0, self.N):
             line = f.readline().strip().split(',')
             line = [int(w) for w in line]
-            self.weights[x,:] = np.array(line)
+            self.costmap[x,:] = np.array(line)
 
-        for i in range(0, self.N):
-            for j in range(0, self.N):
-                if self.weights[i,j] < 200:
-                    self.weights[i,j] = 1
+        #for i in range(0, self.N):
+        #    for j in range(0, self.N):
+        #        if self.costmap[i,j] < 200:
+        #            self.costmap[i,j] = 1
             
 
         self._init_display()
 
         # SET_END
-        astar_path = self.astar_solve(tuple(self.start), tuple(self.path[0]))
-        #astar_path = self.astar_solve((500,100), (400,300))
-        print "Path Length: ", len(astar_path)
-        for l in astar_path:
-            self.img[l] = [255, 0, 255, 255]
+        for i in range(0, len(self.path), 250):
+            astar_path = self.astar_solve(tuple(self.start), tuple(self.path[i]), 100)
+            print astar_path
+            for l in astar_path:
+                self.img[l] = [255, 0, 255, 255]
 
         while(1):
             self._update_display()
 
     def _init_display(self):
-        max = np.max(self.weights)
-        min = np.min(self.weights)
-        self.img = np.log10(self.weights.reshape((self.N, self.N)))
+        max = np.max(self.costmap)
+        min = np.min(self.costmap)
+        self.img = np.log10(self.costmap.reshape((self.N, self.N)))
         max = np.max(self.img)
         min = np.min(self.img)
         self.img -= min
@@ -108,7 +108,7 @@ class World:
                     or (v==u-1 and u%self.N==0) 
                     or (v==u+1 and u%self.N==self.N-1) ):
                     continue
-                alt = dist[u] + self.weights[v] 
+                alt = dist[u] + self.costmap[v] 
                 if alt < dist[v]:
                     dist[v] = alt
                     prev[v] = u
@@ -133,7 +133,7 @@ class World:
             current = prev[current]
             if current == None: break
             total_path.append(current)
-            print current
+        total_path.reverse()
         return total_path
 
     def get_successors(self, node):
@@ -147,7 +147,7 @@ class World:
             neighbors.append(neighbor)
         return neighbors
 
-    def astar_solve(self, start, end):
+    def astar_solve(self, start, end, weight=1):
 
         closed_set = set([])
         open_set = []
@@ -185,13 +185,14 @@ class World:
             closed_set.add(curr)
             # Expand this node.
             for neighbor in self.get_successors(curr):
+                # Skip if we've already expanded this neighbor
                 if neighbor in closed_set: continue 
                 # Find the cost of the cheapest path to neighbor via curr
-                new_gscore = gscore[curr] + self.weights[neighbor[0], neighbor[1]]
+                new_gscore = gscore[curr] + self.costmap[neighbor[0], neighbor[1]]
                 # If neighbor is new or we found a cheaper path
                 if neighbor not in open_set or new_gscore < gscore[neighbor]:
                     # fscore is g+h
-                    fscore = new_gscore + self.manhattan_dist(neighbor, end)
+                    fscore = new_gscore + weight*self.euclidean_dist(neighbor, end)
                     # Add neighbor to the frontier
                     hq.heappush(open_set, (fscore, neighbor))
                     # Keep track of its predecessor
