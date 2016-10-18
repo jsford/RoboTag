@@ -64,6 +64,10 @@ class World:
                 cv.destroyAllWindows()
                 exit(0)
 
+    def in_bounds(self, point):
+        (x, y) = point
+        return 0 <= x < self.N and 0 <= y < self.N
+
     
 
 
