@@ -12,6 +12,8 @@
 \usepackage{enumitem}
 \usepackage{multicol}
 
+\usepackage{amsmath}
+
 
 % Margins
 \topmargin=-0.45in
@@ -130,17 +132,94 @@
 %\vspace{10pt} % Question
 
 \begin{homeworkSection}{(a)} % Section within problem
-\textbf{Planner} Write a planner that allows the robot to catch the moving target. Specifically, the planner must be able to compute the \textbf{least cost path that allows the robot to catch the moving target.} Note that your grade will depend on the quality of the planner.\\\\
-\textbf{Explanation} Provide an explanation for the approach you used for this planner.\\\\
-\textbf{Summary} Run Problem 1 (listed above) and present a summary on the performance of the
-planner in terms of \textit{execution time, cost of the path and number of states expanded during the search.}
 
-\problemAnswer{ % Answer
-\vspace{1mm}
-}
+To run this planner, please use the following command:
+\textbf{python world.py -a prob1.txt}\\
+
+This planner performs a forward djikstra search in x and y and uses the result as an informed heuristic for a single backward A* search in x, y, and t.\\
+
+The 2D djikstra search expands all nodes in the graph - one million nodes for test case one. On my machine, it takes about 8 seconds to complete this phase of the search. The distances calculated by the djikstra search are then used as the heuristic for a backward A* search which searches in both position and time. \\
+
+\textbf{TODO: Time, cost, number of states expanded}
+
+\end{homeworkSection}
+
+\begin{homeworkSection}{(b)} % Section within problem
+
+To run this planner, please use the following command:
+\textbf{python world.py -b prob1.txt}\\
+
+One of the advantages of the algorithm I chose for part (a) is its ease of extension to part (b). By weighting the backward A* search, it is easy to trade optimality for speed, and it comes with the typical weighted A* performance guarantees.\\
+
+
+\textbf{TODO: Time, cost, number of states expanded}
+
 \end{homeworkSection}
 
 \end{homeworkProblem}
+
+%----------------------------------------------------------------------------------------
+%	PROBLEM 2
+%----------------------------------------------------------------------------------------
+
+% To have just one problem per page, simply put a \clearpage after each problem
+
+\begin{homeworkProblem}
+%\vspace{10pt} % Question
+
+\begin{homeworkSection}{2.1} % Section within problem
+Suppose you have two consistent heuristic functions: $h_1$ and $h_2$. Prove that h(s) = max($h_1(s)$, $h_2(s)$) for all states s in the graph is also a consistent heuristic function.\\
+\problemAnswer{ % Answer
+\vspace{1mm}
+A heuristic is consistent if
+\begin{equation*}
+h(n) \leq c(n, n') + h(n')
+\end{equation*}
+for every node $n$ and its child node $n'$.\\
+
+Proof:
+\begin{align*}
+h(n) &= max( h_1(n), h_2(n) ) \\
+     &\leq max( c(n, n') + h_1(n'), c(n, n') + h_2(n')) \\
+     &\leq c(n, n') + max(h_1(n'), h_2(n')) \\
+     &\leq c(n, n') + h(n')
+\end{align*}
+}
+\\
+Suppose you have two consistent heuristic functions: $h_1$ and $h_2$. Prove that h(s) = min($h_1(s)$, $h_2(s)$) for all states s in the graph is also a consistent heuristic function.\\
+\problemAnswer{ % Answer
+\vspace{1mm}
+A heuristic is consistent if
+\begin{equation*}
+h(n) \leq c(n, n') + h(n')
+\end{equation*}
+for every node $n$ and its child node $n'$.\\
+
+Proof:
+\begin{align*}
+h(n) &= min( h_1(n), h_2(n) ) \\
+     &\leq min( c(n, n') + h_1(n'), c(n, n') + h_2(n')) \\
+     &\leq c(n, n') + min(h_1(n'), h_2(n')) \\
+     &\leq c(n, n') + h(n')
+\end{align*}
+}
+\end{homeworkSection}
+
+\begin{homeworkSection}{2.2}
+\textbf{d.} Monotonically non-increasing sequence
+\end{homeworkSection}
+
+\begin{homeworkSection}{2.3}
+\textbf{f.} None of the above
+\end{homeworkSection}
+
+\begin{homeworkSection}{2.4}
+\textbf{e.} None of the above
+\end{homeworkSection}
+
+\end{homeworkProblem}
+
+
 
 %----------------------------------------------------------------------------------------
 
