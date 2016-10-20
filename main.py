@@ -12,8 +12,7 @@ if __name__ == "__main__":
 
     # Construct the world
     world = World(sys.argv[1])
-    world.djikstra_intercept()
-    #world.intercept_solve()
+    world.intercept_solve()
 
 
     

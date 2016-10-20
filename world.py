@@ -47,41 +47,16 @@ class World:
             line = [int(w) for w in line]
             self.costmap[x,:] = np.array(line)
 
-    def in_bounds(self, point):
+    def xy_in_bounds(self, point):
         (x, y) = point
         return 0 <= x < self.N and 0 <= y < self.N
 
+    def txy_in_bounds(self, point):
+        (t, x, y) = point
+        return t >= 0 and 0 <= x < self.N and 0 <= y < self.N
+
     def manhattan_dist(self, start, end):
         return abs(start[0] - end[0]) + abs(start[1] - end[1])
-
-    def djikstra_solve(self):
-        Q = []
-        dist = np.full((self.N, self.N), np.inf)
-        dist[self.start] = 0
-
-        for i in range(0, self.N):
-            for j in range(0, self.N):
-                if (i,j) == self.start:
-                    hq.heappush(Q, (0, self.start))
-                else:
-                    hq.heappush(Q, (np.inf, (i,j)))
-
-        prev = {}
-        prev[self.start] = None
-       
-        count = 0 
-        while len(Q) > 0:
-            d, u = hq.heappop(Q)
-
-            for v in filter(self.in_bounds, [(u[0]+1, u[1]), (u[0]-1, u[1]), 
-                                             (u[0], u[1]+1), (u[0], u[1]-1)]):
-                alt = d + self.costmap[v] 
-                if alt < dist[v]:
-                    hq.heappush(Q, (alt, v))
-                    dist[v] = alt
-                    prev[v] = u
-
-        return dist, prev
 
     def djikstra_intercept(self):
         time_start = time.time()
@@ -130,42 +105,88 @@ class World:
         return path
 
     def reconstruct_path(self, prev, current):
-        cost = self.costmap[current]
+        cost = 0 
         total_path = [current]
-        dwell_cost = np.inf
-        dwell_loc  = None
 
         while True:
-            if self.costmap[current] < dwell_cost:
-                dwell_cost = self.costmap[current] 
-                dwell_loc  = current
             current = prev[current]
-            if current == None: break
-            cost += self.costmap[current]
             total_path.append(current)
-        total_path.reverse()
+            if prev[current] == None: break
+            cost += self.costmap[current[1], current[2]]
 
-        ret_path = Path(total_path, cost, dwell_cost, dwell_loc)
-        return ret_path 
+        return total_path, cost 
 
-    def astar_solve(self, start, end, weight=1, h=None):
-
+    def djikstra_solve(self):
         closed_set = set([])
         open_set = []
-        hq.heappush(open_set, (0, start)) # Don't need to calculate heuristic bc any value will be the min.
+        hq.heappush(open_set, (0, self.start)) 
 
         prev   = {} 
-        prev[start] = None
+        prev[self.start] = None
         gscore = {} 
-        gscore[start] = 0
+        gscore[self.start] = 0
 
-        count = 0
+        while open_set:
+            # Pick the frontier node with smallest fscore.
+            curr = hq.heappop(open_set)[-1]
 
-        if h == None:
-            h = np.empty((self.N, self.N), dtype=np.int)
-            for i in range(0, self.N):
-                for j in range(0, self.N):
-                    h[i][j] = self.manhattan_dist((i,j), self.start)
+            # If curr has been explored previously, skip it.
+            if curr in closed_set:
+                continue
+
+            # Add this node to the closed set.
+            closed_set.add(curr)
+            # Expand this node.
+            for neighbor in filter(self.xy_in_bounds, [(curr[0]+1, curr[1]  ), (curr[0]-1, curr[1]  ), (curr[0]  , curr[1]-1), (curr[0]  , curr[1]+1)]):
+
+                # Skip if we've already expanded this neighbor
+                if neighbor in closed_set: continue 
+                # Find the cost of the cheapest path to neighbor via curr
+                new_gscore = gscore[curr] + self.costmap[neighbor[0], neighbor[1]]
+                # If neighbor is new or we found a cheaper path
+                if neighbor not in gscore or new_gscore < gscore[neighbor]:
+                    # Add neighbor to the frontier
+                    hq.heappush(open_set, (new_gscore, neighbor))
+                    # Keep track of its predecessor
+                    prev[neighbor] = curr
+                    # Update its gscore
+                    gscore[neighbor] = new_gscore
+
+        return prev, gscore
+
+    def intercept_solve(self):
+        start = time.time()
+        prev, dist = self.djikstra_solve()
+        path, cost = self.astar_solve(self.path, self.start, weight=1, h=dist)
+        end = time.time()
+        print cost
+        for p in path:
+            print p
+        print end-start
+
+    def get_successors(self, curr):
+        return filter(self.txy_in_bounds,                                   \
+                                      [(curr[0]-1, curr[1]+1, curr[2]  ),   \
+                                       (curr[0]-1, curr[1]-1, curr[2]  ),   \
+                                       (curr[0]-1, curr[1]  , curr[2]-1),   \
+                                       (curr[0]-1, curr[1]  , curr[2]+1),   \
+                                       (curr[0]-1, curr[1]  , curr[2]  )])
+
+
+    def astar_solve(self, start, end, weight=1, h=None):
+        start = list(start)
+
+        open_set = []
+        closed_set = set([])
+        prev   = {} 
+        gscore = {} 
+
+        for s in range(0, len(start)):
+            if(s >= self.manhattan_dist(start[s], end)):
+                state = (s, start[s][0], start[s][1])
+                hq.heappush(open_set, (0, state))
+                prev[state] = None
+                gscore[state] = 0
 
         while open_set:
             # Pick the frontier node with smallest fscore.
@@ -176,22 +197,23 @@ class World:
                 continue
 
             # If we found the goal, quit.
-            if curr == end:
-                return self.reconstruct_path(prev, curr), gscore
+            if curr == (0, end[0], end[1]):
+                return self.reconstruct_path(prev, curr)
 
             # Add this node to the closed set.
             closed_set.add(curr)
-            # Expand this node.
-            for neighbor in filter(self.in_bounds, [(curr[0]+1, curr[1]  ), (curr[0]-1, curr[1]  ), (curr[0]  , curr[1]-1), (curr[0]  , curr[1]+1)]):
 
+            # Expand this node.
+            for neighbor in self.get_successors(curr):
+                (n_t, n_x, n_y) = neighbor
                 # Skip if we've already expanded this neighbor
                 if neighbor in closed_set: continue 
                 # Find the cost of the cheapest path to neighbor via curr
-                new_gscore = gscore[curr] + self.costmap[neighbor[0], neighbor[1]]
+                new_gscore = gscore[curr] + self.costmap[n_x, n_y]
                 # If neighbor is new or we found a cheaper path
                 if neighbor not in gscore or new_gscore < gscore[neighbor]:
                     # fscore is g+h
-                    fscore = new_gscore + weight*h[neighbor]
+                    fscore = new_gscore + weight*h[n_x, n_y]
                     # Add neighbor to the frontier
                     hq.heappush(open_set, (fscore, neighbor))
                     # Keep track of its predecessor
@@ -201,35 +223,4 @@ class World:
 
         print 'FAILED!'
         return None
-
-    def intercept_solve(self):
-        R2D2_path_set = set([])
-        R2D2_path = {} 
-        for i in range(0, len(self.path)):
-            if self.manhattan_dist(self.path[i], self.start) > i or \
-                self.path[i] in R2D2_path_set:
-                continue
-            R2D2_path_set.add((i, self.path[i]))
-            R2D2_path[i] = self.path[i]
-
-        
-        h_init = np.empty((self.N, self.N), dtype=np.int)
-        for i in range(0, self.N):
-            for j in range(0, self.N):
-                h_init[i][j] = self.manhattan_dist((i,j), self.start)
-
-        for l in R2D2_path:
-            s = time.time()
-            retval = self.astar_solve( R2D2_path[l], self.start, weight=1, h=h_init)
-            e = time.time()
-            print "ASTAR: " + str(R2D2_path[l]) + " -> " + \
-                  str(self.start) + " in " + str(e-s) + " sec."
-            path, cost, dwell_cost, dwell_loc = retval[0]
-            gscore = retval[1]
-            
-            s = time.time()
-            for g in gscore:
-                h_init[g] = gscore[self.start] - gscore[g] 
-            e = time.time()
-            print "Update: ", (e-s)
 
