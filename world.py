@@ -1,20 +1,8 @@
+import sys
 import numpy as np
 import heapq as hq
 import time
 
-
-class Path:
-    def __init__(self, path=None, cost=np.inf, dwell_cost=None, dwell_loc=None):
-        self.path = path
-        self.cost   = cost
-        self.dwell_cost = dwell_cost
-        self.dwell_loc = dwell_loc
-    def length(self):
-        return len(self.path)
-    def end(self):
-        return self.path[-1]
-    def start(self):
-        return self.path[0]
 
 class World:
     def __init__(self, fname):
@@ -58,52 +46,6 @@ class World:
     def manhattan_dist(self, start, end):
         return abs(start[0] - end[0]) + abs(start[1] - end[1])
 
-    def djikstra_intercept(self):
-        time_start = time.time()
-
-        dist, prev = self.djikstra_solve()
-
-        min_path = Path()
-        min_intercept_time = np.inf
-        
-        for R2D2_time in range(0, len(self.path)):
-
-            if self.manhattan_dist(self.path[R2D2_time], self.start) > R2D2_time+1:
-                continue
-
-            current_path = self.reconstruct_path(prev, self.path[R2D2_time])
-
-            if( R2D2_time < current_path.length() ):
-                continue
-
-            current_path.cost += (1+R2D2_time-current_path.length())*current_path.dwell_cost
-
-            if(current_path.cost < min_path.cost or (current_path.cost == min_path.cost and R2D2_time < min_intercept_time) ):
-                min_path = current_path
-                min_intercept_time = R2D2_time
-
-
-        if(min_intercept_time > min_path.length()-1):
-            #print "DWELL at " + str(min_path.dwell_loc) + \
-            #      " for " + str(min_intercept_time-min_path.length()+1) + \
-            #      " timesteps at a cost of " + str(min_path.dwell_cost) + " per timestep."
-            self.insert_dwell(min_path, min_intercept_time-min_path.length()+1)
-
-
-        print min_path.cost
-        for l in min_path.path:
-            print l
-        #print "Time: ", time.time()-time_start
-
-    def insert_dwell(self, path, dwell_amt):
-        for loc in range(0, path.length()):
-            location = path.path[loc]
-            if(location == path.dwell_loc):
-                for d in range(0, dwell_amt):
-                    path.path.insert(loc, path.dwell_loc)
-                break
-        return path
-
     def reconstruct_path(self, prev, current):
         cost = 0 
         total_path = [current]
@@ -128,7 +70,7 @@ class World:
 
         while open_set:
             # Pick the frontier node with smallest fscore.
-            curr = hq.heappop(open_set)[-1]
+            curr_time, curr = hq.heappop(open_set)
 
             # If curr has been explored previously, skip it.
             if curr in closed_set:
@@ -164,15 +106,6 @@ class World:
             print p
         print end-start
 
-    def get_successors(self, curr):
-        return filter(self.txy_in_bounds,                                   \
-                                      [(curr[0]-1, curr[1]+1, curr[2]  ),   \
-                                       (curr[0]-1, curr[1]-1, curr[2]  ),   \
-                                       (curr[0]-1, curr[1]  , curr[2]-1),   \
-                                       (curr[0]-1, curr[1]  , curr[2]+1),   \
-                                       (curr[0]-1, curr[1]  , curr[2]  )])
-
-
     def astar_solve(self, start, end, weight=1, h=None):
         start = list(start)
 
@@ -190,7 +123,7 @@ class World:
 
         while open_set:
             # Pick the frontier node with smallest fscore.
-            curr = hq.heappop(open_set)[-1]
+            curr_time, curr = hq.heappop(open_set)
 
             # If curr has been explored previously, skip it.
             if curr in closed_set:
@@ -204,7 +137,13 @@ class World:
             closed_set.add(curr)
 
             # Expand this node.
-            for neighbor in self.get_successors(curr):
+            (t, x, y) = curr
+            t = t-1
+            for neighbor in filter(self.txy_in_bounds, [(t, x  , y  ),   \
+                                                        (t, x+1, y  ),   \
+                                                        (t, x-1, y  ),   \
+                                                        (t, x  , y-1),   \
+                                                        (t, x  , y+1)]):
                 (n_t, n_x, n_y) = neighbor
                 # Skip if we've already expanded this neighbor
                 if neighbor in closed_set: continue 
@@ -224,3 +163,15 @@ class World:
         print 'FAILED!'
         return None
 
+
+
+
+if __name__ == '__main__':
+    if len(sys.argv) != 2:
+        print 'usage: python world.py prob.txt'
+        exit(1)
+    
+    # Construct the world
+    world = World(sys.argv[1])
+    world.intercept_solve()
+    
