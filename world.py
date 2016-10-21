@@ -110,11 +110,25 @@ class World:
         print cost
         #swizzle_path = []
         for p in path:
-            print p
             (t, x, y) = p
+            print (x, y)
         #    swizzle_path.append( (x, y, t) )
         #print swizzle_path
-        print end-start
+        #print end-start
+
+    def get_successors(self, curr):
+        (t, x, y) = curr
+        neighbors = filter(self.txy_in_bounds, [(t-1, x+1, y  ),   \
+                                                (t-1, x-1, y  ),   \
+                                                (t-1, x  , y-1),   \
+                                                (t-1, x  , y+1)])
+
+        # TODO: This does not generalize to all problems. Add some min_so_far bookkeeping.
+        if self.costmap[x, y] == 1:
+            neighbors.append((t-1, x, y))
+
+        return neighbors
+        
 
     def astar_solve(self, start, end, weight=1, h=None, djikstra_dists=None):
         start = list(start)
@@ -143,7 +157,7 @@ class World:
 
             # If we found the goal, quit.
             if curr == (0, end[0], end[1]):
-                print "EXPANDED STATES: ", expanded_states
+                #print "EXPANDED STATES: ", expanded_states
                 return self.reconstruct_path(prev, curr)
 
 
@@ -152,12 +166,7 @@ class World:
 
             # Expand this node.
             expanded_states += 1
-            (t, x, y) = curr
-            for neighbor in filter(self.txy_in_bounds, [(t-1, x  , y  ),   \
-                                                        (t-1, x+1, y  ),   \
-                                                        (t-1, x-1, y  ),   \
-                                                        (t-1, x  , y-1),   \
-                                                        (t-1, x  , y+1)]):
+            for neighbor in self.get_successors(curr):
                 # Skip if we've already expanded this neighbor
                 if neighbor in closed_set: continue
 
