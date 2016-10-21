@@ -98,18 +98,25 @@ class World:
 
     def intercept_solve(self, w=1):
         start = time.time()
-        prev, dist = self.djikstra_solve()
-        path, cost = self.astar_solve(self.path, self.start, weight=w, h=dist)
+        prev, dists = self.djikstra_solve()
+        
+        djikstra_heuristic = {}
+        for d in dists:
+            djikstra_heuristic[d] = dists[d] - self.costmap[d]
+
+        path, cost = self.astar_solve(self.path, self.start, weight=w, djikstra_dists=dists, h=djikstra_heuristic)
+
         end = time.time()
         print cost
-        swizzle_path = []
+        #swizzle_path = []
         for p in path:
+            print p
             (t, x, y) = p
-            swizzle_path.append( (x, y, t) )
-        print swizzle_path
+        #    swizzle_path.append( (x, y, t) )
+        #print swizzle_path
         print end-start
 
-    def astar_solve(self, start, end, weight=1, h=None):
+    def astar_solve(self, start, end, weight=1, h=None, djikstra_dists=None):
         start = list(start)
 
         open_set = []
@@ -120,7 +127,7 @@ class World:
         for s in range(0, len(start)):
             if(s >= self.manhattan_dist(start[s], end)):
                 state = (s, start[s][0], start[s][1])
-                hq.heappush(open_set, (h[start[s]], state))
+                hq.heappush(open_set, (djikstra_dists[start[s]], state))
                 prev[state] = None
                 gscore[state] = 0
 
@@ -128,21 +135,23 @@ class World:
         while open_set:
             # Pick the frontier node with smallest fscore.
             curr_time, curr = hq.heappop(open_set)
-            expanded_states += 1
 
             # If curr has been explored previously, skip it.
-            if curr in closed_set:
-                continue
+            #if curr in closed_set:
+            #    continue
+
 
             # If we found the goal, quit.
             if curr == (0, end[0], end[1]):
                 print "EXPANDED STATES: ", expanded_states
                 return self.reconstruct_path(prev, curr)
 
+
             # Add this node to the closed set.
-            closed_set.add(curr)
+            #closed_set.add(curr)
 
             # Expand this node.
+            expanded_states += 1
             (t, x, y) = curr
             for neighbor in filter(self.txy_in_bounds, [(t-1, x  , y  ),   \
                                                         (t-1, x+1, y  ),   \
@@ -150,7 +159,7 @@ class World:
                                                         (t-1, x  , y-1),   \
                                                         (t-1, x  , y+1)]):
                 # Skip if we've already expanded this neighbor
-                if neighbor in closed_set: continue 
+                if neighbor in closed_set: continue
 
                 (n_t, n_x, n_y) = neighbor
 
